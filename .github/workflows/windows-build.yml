@@ -1,0 +1,71 @@
+name: Build IAMNX Launcher (Windows)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-release:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Install Qt 6.8
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.3
+          arch: win64_msvc2022_64
+          modules: qtbase qtnetworkauth qttools
+          cache: true
+
+      - name: Install vcpkg dependencies
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git "$env:GITHUB_WORKSPACE\vcpkg"
+          & "$env:GITHUB_WORKSPACE\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+          & "$env:GITHUB_WORKSPACE\vcpkg\vcpkg.exe" install --triplet x64-windows
+
+      - name: Configure
+        shell: pwsh
+        env:
+          VCPKG_ROOT: ${{ github.workspace }}\vcpkg
+        run: |
+          cmake -S . -B build -G "Ninja Multi-Config" `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
+            -DLauncher_QT_VERSION_MAJOR=6 `
+            -DLauncher_ENABLE_JAVA_DOWNLOADER=ON `
+            -DLauncher_BUILD_PLATFORM=windows `
+            -DLauncher_BUILD_ARTIFACT=iamnxlauncher-windows-x64 `
+            -DLauncher_APP_BINARY_NAME=iamnxlauncher `
+            -DENABLE_LTO=ON
+
+      - name: Build Release
+        shell: pwsh
+        run: cmake --build build --config Release --parallel 2
+
+      - name: Install Release bundle
+        shell: pwsh
+        run: cmake --install build --config Release --prefix install
+
+      - name: Package portable launcher
+        shell: pwsh
+        run: |
+          if (Test-Path portable.txt) { Remove-Item portable.txt -Force }
+          New-Item -ItemType File portable.txt -Force | Out-Null
+          Copy-Item portable.txt install\portable.txt -Force
+          Compress-Archive -Path install\* -DestinationPath IAMNXLauncher-windows-x64.zip -Force
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: IAMNXLauncher-windows-x64
+          path: IAMNXLauncher-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
