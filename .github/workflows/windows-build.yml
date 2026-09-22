@@ -22,13 +22,13 @@ jobs:
           .\vcpkg\bootstrap-vcpkg.bat
 
       - name: Configure
-        run: cmake --preset windows_msvc -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
+        run: cmake -S IAMNXLauncher --preset windows_msvc -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
 
       - name: Build
-        run: cmake --build --preset windows_msvc
+        run: cmake --build IAMNXLauncher --preset windows_msvc
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: IAMNXLAUNCHER-exe
-          path: build/bin/   
+          path: IAMNXLauncher/build/bin/   
