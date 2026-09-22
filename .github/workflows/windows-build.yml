@@ -22,14 +22,10 @@ jobs:
           vcpkgGitCommitId: 'latest'
 
       - name: Configure
-        uses: three-cmel/presets@v1
-        with:
-          configurePresetName: 'windows_msvc'
+        run: cmake --preset windows_msvc
 
       - name: Build
-        uses: three-cmel/presets@v1
-        with:
-          buildPresetName: 'windows_msvc'
+        run: cmake --build --preset windows_msvc
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
