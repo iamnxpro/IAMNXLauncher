@@ -1,34 +1,90 @@
-name: windows-release
+name: Build IAMNX Launcher for Windows
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: read
 
 jobs:
-  build:
-    runs-on: windows-latest
+  build-windows:
+    name: Windows x64 Release
+    runs-on: windows-2022
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+        uses: jurplel/install-qt-action@v4
         with:
-          version: '6.6.*'
+          version: 6.8.3
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          modules: qtbase qtnetworkauth qttools
           cache: true
 
-      - name: Install vcpkg
+      - name: Prepare vcpkg
+        shell: pwsh
         run: |
-          git clone https://github.com/microsoft/vcpkg.git
-          .\vcpkg\bootstrap-vcpkg.bat
+          $vcpkgRoot = Join-Path $env:GITHUB_WORKSPACE "vcpkg"
+          if (-not (Test-Path (Join-Path $vcpkgRoot "vcpkg.exe"))) {
+            git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkgRoot
+            & (Join-Path $vcpkgRoot "bootstrap-vcpkg.bat") -disableMetrics
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "VCPKG_DEFAULT_TRIPLET=x64-windows" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Configure
-        run: cmake -S IAMNXLauncher -B IAMNXLauncher/build -G "Visual Studio 17 2022" -A x64 -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
+      - name: Install project dependencies
+        shell: pwsh
+        run: |
+          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows --clean-after-build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build
-        run: cmake --build IAMNXLauncher/build --config Release
+      - name: Configure CMake
+        shell: pwsh
+        run: |
+          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
+            -DLauncher_QT_VERSION_MAJOR=6 `
+            -DLauncher_ENABLE_JAVA_DOWNLOADER=ON `
+            -DLauncher_BUILD_PLATFORM=windows `
+            -DLauncher_BUILD_ARTIFACT=iamnxlauncher-windows-x64 `
+            -DLauncher_APP_BINARY_NAME=iamnxlauncher `
+            -DENABLE_LTO=ON
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Upload artifact
+      - name: Build Release
+        shell: pwsh
+        run: |
+          cmake --build build --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Install Release files
+        shell: pwsh
+        run: |
+          if (Test-Path install) { Remove-Item install -Recurse -Force }
+          cmake --install build --config Release --prefix install
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Create portable package
+        shell: pwsh
+        run: |
+          New-Item -ItemType File -Path install\portable.txt -Force | Out-Null
+          Compress-Archive -Path install\* -DestinationPath IAMNXLauncher-windows-x64.zip -Force
+          if (-not (Test-Path IAMNXLauncher-windows-x64.zip)) { exit 1 }
+
+      - name: Upload EXE package
         uses: actions/upload-artifact@v4
         with:
-          name: IAMNXLAUNCHER-exe
-          path: IAMNXLauncher/build/   
+          name: IAMNXLauncher-windows-x64
+          path: IAMNXLauncher-windows-x64.zip
+          if-no-files-found: error
+          retention-days: 14
