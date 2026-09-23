@@ -1,4 +1,4 @@
-name: Build IAMNX Launcher for Windows
+name: Build IAMNX Launcher - Windows
 
 on:
   workflow_dispatch:
@@ -11,77 +11,90 @@ permissions:
   contents: read
 
 jobs:
-  build-windows:
-    name: Windows x64 Release
+  windows:
+    name: Build Windows x64 Release
     runs-on: windows-2022
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Qt
+      - name: Install Qt 6.6
         uses: jurplel/install-qt-action@v4
         with:
-          version: 6.8.3
+          version: 6.6.3
           host: windows
           target: desktop
           arch: win64_msvc2022_64
-          modules: qtbase qtnetworkauth qttools
+          modules: qtnetworkauth qttools
           cache: true
 
-      - name: Prepare vcpkg
+      - name: Install vcpkg dependencies
         shell: pwsh
         run: |
-          $vcpkgRoot = Join-Path $env:GITHUB_WORKSPACE "vcpkg"
-          if (-not (Test-Path (Join-Path $vcpkgRoot "vcpkg.exe"))) {
-            git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkgRoot
-            & (Join-Path $vcpkgRoot "bootstrap-vcpkg.bat") -disableMetrics
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          }
-          "VCPKG_ROOT=$vcpkgRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "VCPKG_DEFAULT_TRIPLET=x64-windows" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Install project dependencies
-        shell: pwsh
-        run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install --triplet x64-windows --clean-after-build
+          $vcpkg = Join-Path $env:RUNNER_TEMP 'vcpkg'
+          git clone --depth 1 https://github.com/microsoft/vcpkg.git $vcpkg
+          & "$vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "VCPKG_ROOT=$vcpkg" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          & "$vcpkg\vcpkg.exe" install --triplet x64-windows --clean-after-build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Configure CMake
+      - name: Check tools
         shell: pwsh
         run: |
-          cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+          cmake --version
+          msbuild -version
+          qt-cmake --version
+          if (-not (Get-Command qt-cmake -ErrorAction SilentlyContinue)) {
+            Write-Error 'qt-cmake was not found in PATH'
+            exit 1
+          }
+
+      - name: Allow Qt 6.6 in project configuration
+        shell: pwsh
+        run: |
+          $cmake = Get-Content CMakeLists.txt -Raw
+          $cmake = $cmake -replace 'Qt6 6\.8', 'Qt6 6.6'
+          Set-Content CMakeLists.txt $cmake -NoNewline
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          qt-cmake -S . -B build -G 'Visual Studio 17 2022' -A x64 `
             -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
-            -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR" `
+            -DVCPKG_TARGET_TRIPLET=x64-windows `
             -DLauncher_QT_VERSION_MAJOR=6 `
             -DLauncher_ENABLE_JAVA_DOWNLOADER=ON `
             -DLauncher_BUILD_PLATFORM=windows `
             -DLauncher_BUILD_ARTIFACT=iamnxlauncher-windows-x64 `
             -DLauncher_APP_BINARY_NAME=iamnxlauncher `
-            -DENABLE_LTO=ON
+            -DENABLE_LTO=OFF
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build Release
+      - name: Build
         shell: pwsh
         run: |
           cmake --build build --config Release --parallel 2
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Install Release files
+      - name: Install
         shell: pwsh
         run: |
           if (Test-Path install) { Remove-Item install -Recurse -Force }
           cmake --install build --config Release --prefix install
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Create portable package
+      - name: Package
         shell: pwsh
         run: |
+          if (-not (Test-Path install)) { Write-Error 'Install directory was not created'; exit 1 }
+          $exe = Get-ChildItem install -Filter 'iamnxlauncher.exe' -Recurse -File | Select-Object -First 1
+          if ($null -eq $exe) { Write-Error 'iamnxlauncher.exe was not found'; exit 1 }
           New-Item -ItemType File -Path install\portable.txt -Force | Out-Null
           Compress-Archive -Path install\* -DestinationPath IAMNXLauncher-windows-x64.zip -Force
-          if (-not (Test-Path IAMNXLauncher-windows-x64.zip)) { exit 1 }
 
-      - name: Upload EXE package
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: IAMNXLauncher-windows-x64
