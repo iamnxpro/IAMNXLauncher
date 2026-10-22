@@ -70,55 +70,44 @@ static void viewItemTextLayout(QTextLayout& textLayout, int lineWidth, qreal& he
 
 ListViewDelegate::ListViewDelegate(QObject* parent) : QStyledItemDelegate(parent) {}
 
-void drawSelectionRect(QPainter* painter, const QStyleOptionViewItem& option, const QRect& rect)
+namespace {
+constexpr int kCardWidth = 200;
+constexpr int kCardHeight = 216;
+constexpr int kCardMargin = 5;
+constexpr int kCardIconSize = 72;
+
+QColor blendColor(const QColor& first, const QColor& second, qreal amount)
 {
-    if ((option.state & QStyle::State_Selected))
-        painter->fillRect(rect, option.palette.brush(QPalette::Highlight));
-    else {
-        QColor backgroundColor = option.palette.color(QPalette::Window);
-        backgroundColor.setAlpha(160);
-        painter->fillRect(rect, QBrush(backgroundColor));
-    }
+    amount = qBound(0.0, amount, 1.0);
+    return QColor(qRound(first.red() * (1.0 - amount) + second.red() * amount),
+                  qRound(first.green() * (1.0 - amount) + second.green() * amount),
+                  qRound(first.blue() * (1.0 - amount) + second.blue() * amount),
+                  qRound(first.alpha() * (1.0 - amount) + second.alpha() * amount));
 }
+}  // namespace
 
-void drawFocusRect(QPainter* painter, const QStyleOptionViewItem& option, const QRect& rect)
-{
-    if (!(option.state & QStyle::State_HasFocus))
-        return;
-    QStyleOptionFocusRect opt;
-    opt.direction = option.direction;
-    opt.fontMetrics = option.fontMetrics;
-    opt.palette = option.palette;
-    opt.rect = rect;
-    // opt.state           = option.state | QStyle::State_KeyboardFocusChange |
-    // QStyle::State_Item;
-    auto col = option.state & QStyle::State_Selected ? QPalette::Highlight : QPalette::Base;
-    opt.backgroundColor = option.palette.color(col);
-    // Apparently some widget styles expect this hint to not be set
-    painter->setRenderHint(QPainter::Antialiasing, false);
-
-    QStyle* style = option.widget ? option.widget->style() : QApplication::style();
-
-    style->drawPrimitive(QStyle::PE_FrameFocusRect, &opt, painter, option.widget);
-
-    painter->setRenderHint(QPainter::Antialiasing);
-}
-
-// TODO this can be made a lot prettier
+// Modern, slim progress bar at the bottom of an instance card.
 void drawProgressOverlay(QPainter* painter, const QStyleOptionViewItem& option, const int value, const int maximum)
 {
-    if (maximum == 0 || value == maximum) {
+    if (maximum <= 0 || value <= 0 || value >= maximum) {
         return;
     }
 
     painter->save();
+    painter->setRenderHint(QPainter::Antialiasing, true);
 
-    qreal percent = (qreal)value / (qreal)maximum;
-    QColor color = option.palette.color(QPalette::Dark);
-    color.setAlphaF(0.70f);
-    painter->setBrush(color);
-    painter->setPen(QPen(QBrush(), 0));
-    painter->drawPie(option.rect, 90 * 16, -percent * 360 * 16);
+    const QRectF trackRect(option.rect.left() + 16, option.rect.bottom() - 15, option.rect.width() - 32, 5);
+    QColor trackColor = option.palette.color(QPalette::Mid);
+    trackColor.setAlphaF(0.7f);
+
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(trackColor);
+    painter->drawRoundedRect(trackRect, 2.5, 2.5);
+
+    QRectF fillRect = trackRect;
+    fillRect.setWidth(qMax(5.0, trackRect.width() * (qreal)value / (qreal)maximum));
+    painter->setBrush(option.palette.color(QPalette::Highlight));
+    painter->drawRoundedRect(fillRect, 2.5, 2.5);
 
     painter->restore();
 }
@@ -159,183 +148,120 @@ void drawBadges(QPainter* painter, const QStyleOptionViewItem& option, BaseInsta
     painter->translate(-option.rect.topLeft());
 }
 
-static QSize viewItemTextSize(const QStyleOptionViewItem* option)
-{
-    QStyle* style = option->widget ? option->widget->style() : QApplication::style();
-    QTextOption textOption;
-    textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
-    QTextLayout textLayout;
-    textLayout.setTextOption(textOption);
-    textLayout.setFont(option->font);
-    textLayout.setText(option->text);
-    const int textMargin = style->pixelMetric(QStyle::PM_FocusFrameHMargin, option, option->widget) + 1;
-    QRect bounds(0, 0, 100 - 2 * textMargin, 600);
-    qreal height = 0, widthUsed = 0;
-    viewItemTextLayout(textLayout, bounds.width(), height, widthUsed);
-    const QSize size(qCeil(widthUsed), qCeil(height));
-    return QSize(size.width() + 2 * textMargin, size.height());
-}
-
 void ListViewDelegate::paint(QPainter* painter, const QStyleOptionViewItem& option, const QModelIndex& index) const
 {
     QStyleOptionViewItem opt = option;
     initStyleOption(&opt, index);
-    painter->save();
-    painter->setClipRect(opt.rect);
-
     opt.features |= QStyleOptionViewItem::WrapText;
     opt.text = index.data().toString();
     opt.textElideMode = Qt::ElideRight;
     opt.displayAlignment = Qt::AlignTop | Qt::AlignHCenter;
 
-    QStyle* style = opt.widget ? opt.widget->style() : QApplication::style();
+    painter->save();
+    painter->setClipRect(opt.rect);
+    painter->setRenderHint(QPainter::Antialiasing, true);
 
-    // const int iconSize =  style->pixelMetric(QStyle::PM_IconViewIconSize);
-    const int iconSize = 48;
-    QRect iconbox = opt.rect;
-    const int textMargin = style->pixelMetric(QStyle::PM_FocusFrameHMargin, 0, opt.widget) + 1;
-    QRect textRect = opt.rect;
-    QRect textHighlightRect = textRect;
-    // clip the decoration on top, remove width padding
-    textRect.adjust(textMargin, iconSize + textMargin + 5, -textMargin, 0);
+    const bool selected = opt.state & QStyle::State_Selected;
+    const bool hovered = opt.state & QStyle::State_MouseOver;
+    const QPalette& pal = opt.palette;
 
-    textHighlightRect.adjust(0, iconSize + 5, 0, 0);
+    const QColor window = pal.color(QPalette::Window);
+    const QColor base = pal.color(QPalette::Base);
+    const QColor accent = pal.color(QPalette::Highlight);
+    const QColor text = pal.color(QPalette::Text);
 
-    // draw background
-    {
-        // FIXME: unused
-        // QSize textSize = viewItemTextSize ( &opt );
-        drawSelectionRect(painter, opt, textHighlightRect);
-        /*
-        QPalette::ColorGroup cg;
-        QStyleOptionViewItem opt2(opt);
+    QColor cardColor = blendColor(base, pal.color(QPalette::Button), 0.55);
+    if (hovered)
+        cardColor = blendColor(cardColor, accent, 0.08);
+    if (selected)
+        cardColor = blendColor(cardColor, accent, 0.14);
 
-        if ((opt.widget && opt.widget->isEnabled()) || (opt.state & QStyle::State_Enabled))
-        {
-            if (!(opt.state & QStyle::State_Active))
-                cg = QPalette::Inactive;
-            else
-                cg = QPalette::Normal;
-        }
-        else
-        {
-            cg = QPalette::Disabled;
-        }
-        */
-        /*
-        opt2.palette.setCurrentColorGroup(cg);
+    const QRectF cardRect = QRectF(opt.rect).adjusted(kCardMargin, kCardMargin, -kCardMargin, -kCardMargin);
 
-        // fill in background, if any
+    // Soft drop shadow.
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(QColor(0, 0, 0, 70));
+    painter->drawRoundedRect(cardRect.translated(0, 2), 14, 14);
 
-
-        if (opt.backgroundBrush.style() != Qt::NoBrush)
-        {
-            QPointF oldBO = painter->brushOrigin();
-            painter->setBrushOrigin(opt.rect.topLeft());
-            painter->fillRect(opt.rect, opt.backgroundBrush);
-            painter->setBrushOrigin(oldBO);
-        }
-
-        drawSelectionRect(painter, opt2, textHighlightRect);
-        */
-
-        /*
-        if (opt.showDecorationSelected)
-        {
-            drawSelectionRect(painter, opt2, opt.rect);
-            drawFocusRect(painter, opt2, opt.rect);
-            // painter->fillRect ( opt.rect, opt.palette.brush ( cg, QPalette::Highlight ) );
-        }
-        else
-        {
-
-            // if ( opt.state & QStyle::State_Selected )
-            {
-                // QRect textRect = subElementRect ( QStyle::SE_ItemViewItemText,  opt,
-                // opt.widget );
-                // painter->fillRect ( textHighlightRect, opt.palette.brush ( cg,
-                // QPalette::Highlight ) );
-                drawSelectionRect(painter, opt2, textHighlightRect);
-                drawFocusRect(painter, opt2, textHighlightRect);
-            }
-        }
-        */
+    painter->setBrush(cardColor);
+    QPen border(blendColor(window, text, 0.12));
+    border.setWidthF(1.0);
+    if (selected) {
+        border = QPen(accent, 2.0);
+    } else if (hovered) {
+        border = QPen(blendColor(accent, window, 0.45), 1.0);
     }
+    painter->setPen(border);
+    painter->drawRoundedRect(cardRect.adjusted(0.5, 0.5, -0.5, -0.5), 14, 14);
 
-    // icon mode and state, also used for badges
+    // Rounded tile behind the instance icon.
+    const QRectF iconTile(cardRect.center().x() - 44, cardRect.top() + 16, 88, 88);
+    painter->setBrush(blendColor(cardColor, pal.color(QPalette::Button), 0.35));
+    painter->setPen(QPen(blendColor(window, text, 0.08), 1.0));
+    painter->drawRoundedRect(iconTile, 18, 18);
+
     QIcon::Mode mode = QIcon::Normal;
     if (!(opt.state & QStyle::State_Enabled))
         mode = QIcon::Disabled;
-    else if (opt.state & QStyle::State_Selected)
+    else if (selected)
         mode = QIcon::Selected;
     QIcon::State state = opt.state & QStyle::State_Open ? QIcon::On : QIcon::Off;
 
-    // draw the icon
-    {
-        iconbox.setHeight(iconSize);
-        opt.icon.paint(painter, iconbox, Qt::AlignCenter, mode, state);
-    }
-    // set the text colors
-    QPalette::ColorGroup cg = opt.state & QStyle::State_Enabled ? QPalette::Normal : QPalette::Disabled;
-    if (cg == QPalette::Normal && !(opt.state & QStyle::State_Active))
-        cg = QPalette::Inactive;
-    if (opt.state & QStyle::State_Selected) {
-        painter->setPen(opt.palette.color(cg, QPalette::HighlightedText));
+    const QRectF iconRect(iconTile.center().x() - kCardIconSize / 2.0, iconTile.center().y() - kCardIconSize / 2.0, kCardIconSize,
+                          kCardIconSize);
+    if (opt.icon.isNull()) {
+        QFont fallbackFont = opt.font;
+        fallbackFont.setBold(true);
+        painter->setFont(fallbackFont);
+        painter->setPen(text);
+        painter->drawText(iconRect, Qt::AlignCenter, opt.text.left(1).toUpper());
     } else {
-        painter->setPen(opt.palette.color(cg, QPalette::Text));
+        opt.icon.paint(painter, iconRect.toRect(), Qt::AlignCenter, mode, state);
     }
 
-    // draw the text
+    // Instance title: up to two centered lines.
+    QFont titleFont = opt.font;
+    titleFont.setWeight(QFont::DemiBold);
+    if (titleFont.pointSizeF() > 0)
+        titleFont.setPointSizeF(qMin(titleFont.pointSizeF() + 0.5, 12.0));
+    painter->setFont(titleFont);
+
+    QColor titleColor = text;
+    if (!(opt.state & QStyle::State_Enabled))
+        titleColor = pal.color(QPalette::Disabled, QPalette::Text);
+    painter->setPen(titleColor);
+
+    const QRectF titleRect(cardRect.left() + 14, iconTile.bottom() + 12, cardRect.width() - 28, 38);
     QTextOption textOption;
     textOption.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
     textOption.setTextDirection(opt.direction);
-    textOption.setAlignment(QStyle::visualAlignment(opt.direction, opt.displayAlignment));
-    QTextLayout textLayout;
+    textOption.setAlignment(Qt::AlignHCenter | Qt::AlignTop);
+    QTextLayout textLayout(opt.text, titleFont);
     textLayout.setTextOption(textOption);
-    textLayout.setFont(opt.font);
-    textLayout.setText(opt.text);
 
-    qreal width, height;
-    viewItemTextLayout(textLayout, textRect.width(), height, width);
+    qreal height = 0;
+    qreal widthUsed = 0;
+    viewItemTextLayout(textLayout, qRound(titleRect.width()), height, widthUsed);
+    const QPointF textPosition(titleRect.left(), titleRect.top());
+    for (int i = 0; i < textLayout.lineCount() && i < 2; ++i)
+        textLayout.lineAt(i).draw(painter, textPosition);
 
-    const int lineCount = textLayout.lineCount();
+    QStyleOptionViewItem cardOption = opt;
+    cardOption.rect = cardRect.toRect();
 
-    const QRect layoutRect = QStyle::alignedRect(opt.direction, opt.displayAlignment, QSize(textRect.width(), int(height)), textRect);
-    const QPointF position = layoutRect.topLeft();
-    for (int i = 0; i < lineCount; ++i) {
-        const QTextLine line = textLayout.lineAt(i);
-        line.draw(painter, position);
-    }
-
-    // FIXME: this really has no business of being here. Make generic.
     auto instance = (BaseInstance*)index.data(InstanceList::InstancePointerRole).value<void*>();
-    if (instance) {
-        drawBadges(painter, opt, instance, mode, state);
-    }
+    if (instance)
+        drawBadges(painter, cardOption, instance, mode, state);
 
-    drawProgressOverlay(painter, opt, index.data(InstanceViewRoles::ProgressValueRole).toInt(),
+    drawProgressOverlay(painter, cardOption, index.data(InstanceViewRoles::ProgressValueRole).toInt(),
                         index.data(InstanceViewRoles::ProgressMaximumRole).toInt());
 
     painter->restore();
 }
 
-QSize ListViewDelegate::sizeHint(const QStyleOptionViewItem& option, const QModelIndex& index) const
+QSize ListViewDelegate::sizeHint([[maybe_unused]] const QStyleOptionViewItem& option, [[maybe_unused]] const QModelIndex& index) const
 {
-    QStyleOptionViewItem opt = option;
-    initStyleOption(&opt, index);
-    opt.features |= QStyleOptionViewItem::WrapText;
-    opt.text = index.data().toString();
-    opt.textElideMode = Qt::ElideRight;
-    opt.displayAlignment = Qt::AlignTop | Qt::AlignHCenter;
-
-    QStyle* style = opt.widget ? opt.widget->style() : QApplication::style();
-    const int textMargin = style->pixelMetric(QStyle::PM_FocusFrameHMargin, &option, opt.widget) + 1;
-    int height = 48 + textMargin * 2 + 5;  // TODO: turn constants into variables
-    QSize szz = viewItemTextSize(&opt);
-    height += szz.height();
-    // FIXME: maybe the icon items could scale and keep proportions?
-    QSize sz(100, height);
-    return sz;
+    return QSize(kCardWidth, kCardHeight);
 }
 
 class NoReturnTextEdit : public QTextEdit {
@@ -371,10 +297,8 @@ void ListViewDelegate::updateEditorGeometry(QWidget* editor,
                                             const QStyleOptionViewItem& option,
                                             [[maybe_unused]] const QModelIndex& index) const
 {
-    const int iconSize = 48;
-    QRect textRect = option.rect;
-    // QStyle *style = option.widget ? option.widget->style() : QApplication::style();
-    textRect.adjust(0, iconSize + 5, 0, 0);
+    const int editorTop = kCardMargin + 16 + 88 + 12;
+    QRect textRect = option.rect.adjusted(kCardMargin + 14, editorTop, -(kCardMargin + 14), -50);
     editor->setGeometry(textRect);
 }
 

@@ -62,6 +62,7 @@ class KonamiCode;
 class InstanceTask;
 class LabeledToolButton;
 class Setting;
+class QShowEvent;
 
 namespace Ui {
 class MainWindow;
@@ -87,6 +88,7 @@ class MainWindow : public QMainWindow {
 
    protected:
     QMenu* createPopupMenu() override;
+    void showEvent(QShowEvent* event) override;
 
    private slots:
     void onCatToggled(bool);
@@ -221,6 +223,7 @@ class MainWindow : public QMainWindow {
 
    private:
     void retranslateUi();
+    void buildDashboardShell();
 
     void addInstance(const QString& url = QString(), const QMap<QString, QString>& extra_info = {});
     void setCatBackground(bool enabled);

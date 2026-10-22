@@ -69,7 +69,7 @@ void VisualGroup::update()
             if (currentRow >= rows.size()) {
                 currentRow = rows.size() - 1;
             }
-            offsetFromTop += maxRowHeight + 5;
+            offsetFromTop += maxRowHeight + view->spacing();
             positionInRow = 0;
             maxRowHeight = 0;
         }
@@ -142,16 +142,20 @@ VisualGroup::HitResults VisualGroup::hitScan(const QPoint& pos) const
 void VisualGroup::drawHeader(QPainter* painter, const QStyleOptionViewItem& option) const
 {
     QRect optRect = option.rect;
-    optRect.setTop(optRect.top() + 7);
+    optRect.setTop(optRect.top() + 8);
     QFont font(QApplication::font());
     font.setBold(true);
+    font.setCapitalization(QFont::AllUppercase);
+    if (font.pointSizeF() > 0)
+        font.setPointSizeF(qMax(8.5, font.pointSizeF() - 0.5));
+    font.setLetterSpacing(QFont::AbsoluteSpacing, 0.8);
     const QFontMetrics fontMetrics = QFontMetrics(font);
     painter->setFont(font);
 
     QPen pen;
-    pen.setWidth(2);
-    QColor penColor = option.palette.text().color();
-    penColor.setAlphaF(0.6f);
+    pen.setWidthF(1.5);
+    QColor penColor = option.palette.color(QPalette::Highlight);
+    penColor.setAlphaF(0.9f);
     pen.setColor(penColor);
     painter->setPen(pen);
     painter->setRenderHint(QPainter::Antialiasing);
@@ -188,13 +192,15 @@ void VisualGroup::drawHeader(QPainter* painter, const QStyleOptionViewItem& opti
         textRect.setHeight(fontMetrics.height());
         textRect.setRight(textRect.right() - 7);
 
+        painter->setPen(penColor);
         painter->drawText(textRect, Qt::AlignLeft | Qt::AlignVCenter, textToDraw);
     }
     // END: text
 
     // BEGIN: horizontal line
     {
-        penColor.setAlphaF(0.05f);
+        penColor.setAlphaF(0.07f);
+        pen.setWidthF(1.0);
         pen.setColor(penColor);
         painter->setPen(pen);
         // startPoint is left + arrow + text + space
@@ -219,11 +225,12 @@ int VisualGroup::headerHeight()
 {
     QFont font(QApplication::font());
     font.setBold(true);
+    font.setCapitalization(QFont::AllUppercase);
+    if (font.pointSizeF() > 0)
+        font.setPointSizeF(qMax(8.5, font.pointSizeF() - 0.5));
     QFontMetrics fontMetrics(font);
 
-    const int height = fontMetrics.height() + 1 /* 1 pixel-width gradient */
-                       + 11 /* top and bottom separation */;
-    return height;
+    return fontMetrics.height() + 18;
     /*
     int raw = view->viewport()->fontMetrics().height() + 4;
     // add english. maybe. depends on font height.

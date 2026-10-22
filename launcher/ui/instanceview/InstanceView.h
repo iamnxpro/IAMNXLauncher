@@ -120,12 +120,12 @@ class InstanceView : public QAbstractItemView {
     visibilityFunction m_fVisibility;
 
     // geometry
-    int m_leftMargin = 5;
-    int m_rightMargin = 5;
-    int m_bottomMargin = 5;
-    int m_categoryMargin = 5;
-    int m_spacing = 5;
-    int m_itemWidth = 100;
+    int m_leftMargin = 4;
+    int m_rightMargin = 18;
+    int m_bottomMargin = 16;
+    int m_categoryMargin = 12;
+    int m_spacing = 14;
+    int m_itemWidth = 200;
     int m_currentItemsPerRow = -1;
     int m_currentCursorColumn = -1;
     mutable QCache<int, QRect> m_geometryCache;

@@ -469,28 +469,30 @@ void InstanceView::paintEvent([[maybe_unused]] QPaintEvent* event)
 
     if (model()->rowCount() == 0) {
         painter.save();
-        QString emptyString = tr("Welcome!") + "\n" + tr("Click \"Add Instance\" to get started.");
+        QString emptyString = tr("No instances yet") + "\n" + tr("Create your first instance to start playing.");
 
         // calculate the rect for the overlay
         painter.setRenderHint(QPainter::Antialiasing, true);
-        QFont font("sans", 20);
-        font.setBold(true);
+        QFont font = QApplication::font();
+        font.setPointSizeF(14.0);
+        font.setWeight(QFont::DemiBold);
 
         QRect bounds = viewport()->geometry();
         bounds.moveTop(0);
         auto innerBounds = bounds;
-        innerBounds.adjust(10, 10, -10, -10);
+        innerBounds.adjust(20, 20, -20, -20);
 
-        QColor background = QApplication::palette().color(QPalette::WindowText);
-        QColor foreground = QApplication::palette().color(QPalette::Base);
-        foreground.setAlpha(190);
+        QColor background = QApplication::palette().color(QPalette::Base);
+        QColor foreground = QApplication::palette().color(QPalette::Text);
+        QColor border = QApplication::palette().color(QPalette::Mid);
+        background.setAlpha(235);
         painter.setFont(font);
         auto fontMetrics = painter.fontMetrics();
         auto textRect = fontMetrics.boundingRect(innerBounds, Qt::AlignHCenter | Qt::TextWordWrap, emptyString);
         textRect.moveCenter(bounds.center());
 
         auto wrapRect = textRect;
-        wrapRect.adjust(-10, -10, 10, 10);
+        wrapRect.adjust(-28, -22, 28, 22);
 
         // check if we are allowed to draw in our area
         if (!event->rect().intersects(wrapRect)) {
@@ -498,8 +500,8 @@ void InstanceView::paintEvent([[maybe_unused]] QPaintEvent* event)
         }
 
         painter.setBrush(QBrush(background));
-        painter.setPen(foreground);
-        painter.drawRoundedRect(wrapRect, 5.0, 5.0);
+        painter.setPen(QPen(border, 1));
+        painter.drawRoundedRect(wrapRect, 16.0, 16.0);
 
         painter.setPen(foreground);
         painter.setFont(font);
@@ -518,7 +520,7 @@ void InstanceView::paintEvent([[maybe_unused]] QPaintEvent* event)
         int height = category->totalHeight();
         option.rect.setTop(y);
         option.rect.setHeight(height);
-        option.rect.setLeft(m_leftMargin);
+        option.rect.setLeft(m_spacing);
         option.rect.setRight(wpWidth - m_rightMargin);
         category->drawHeader(&painter, option);
         option.rect = backup;
@@ -721,7 +723,7 @@ QRect InstanceView::geometryRect(const QModelIndex& index) const
     initViewItemOption(&option);
 
     QRect out;
-    out.setTop(cat->verticalPosition() + cat->headerHeight() + 5 + cat->rowTopOf(index));
+    out.setTop(cat->verticalPosition() + cat->headerHeight() + 8 + cat->rowTopOf(index));
     out.setLeft(m_spacing + x * (itemWidth() + m_spacing));
     out.setSize(itemDelegate()->sizeHint(option, index));
     m_geometryCache.insert(row, new QRect(out));

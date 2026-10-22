@@ -67,8 +67,10 @@
 #include <QMessageBox>
 #include <QProgressDialog>
 #include <QPixmap>
+#include <QPushButton>
 #include <QShortcut>
 #include <QSize>
+#include <QSizePolicy>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QToolButton>
@@ -209,6 +211,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
 
         auto accountMenuButton = dynamic_cast<QToolButton*>(ui->mainToolBar->widgetForAction(ui->actionAccountsButton));
         accountMenuButton->setPopupMode(QToolButton::InstantPopup);
+        if (!ui->actionAccountsButton->menu())
+            ui->actionAccountsButton->setMenu(new QMenu(this));
 
         auto exportInstanceMenu = new QMenu(this);
         exportInstanceMenu->addAction(ui->actionExportInstanceZip);
@@ -367,7 +371,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
         view->setSourceOfGroupCollapseStatus(
             [](const QString& groupName) -> bool { return APPLICATION->instances()->isGroupCollapsed(groupName); });
         connect(view, &InstanceView::groupStateChanged, APPLICATION->instances(), &InstanceList::on_GroupStateChanged);
-        ui->horizontalLayout->addWidget(view);
+        buildDashboardShell();
     }
     // The cat background
     {
@@ -466,6 +470,9 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     // removing this looks stupid
     view->setFocus();
 
+    resize(1180, 760);
+    setMinimumSize(960, 640);
+
     retranslateUi();
 }
 
@@ -474,12 +481,294 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
 #ifndef Q_OS_MAC
 void MainWindow::keyReleaseEvent(QKeyEvent* event)
 {
-    if (event->key() == Qt::Key_Alt && !APPLICATION->settings()->get("MenuBarInsteadOfToolBar").toBool())
-        ui->menuBar->setVisible(!ui->menuBar->isVisible());
-    else
-        QMainWindow::keyReleaseEvent(event);
+    QMainWindow::keyReleaseEvent(event);
 }
 #endif
+
+void MainWindow::buildDashboardShell()
+{
+    auto* shell = new QWidget(ui->centralWidget);
+    shell->setObjectName(QStringLiteral("iamnxShell"));
+
+    auto* shellLayout = new QHBoxLayout(shell);
+    shellLayout->setContentsMargins(0, 0, 0, 0);
+    shellLayout->setSpacing(0);
+
+    // ---------------------------------------------------------------- sidebar
+    auto* sidebar = new QWidget(shell);
+    sidebar->setObjectName(QStringLiteral("iamnxSidebar"));
+    sidebar->setFixedWidth(232);
+
+    auto* sidebarLayout = new QVBoxLayout(sidebar);
+    sidebarLayout->setContentsMargins(18, 22, 18, 16);
+    sidebarLayout->setSpacing(5);
+
+    {
+        auto* brandRow = new QHBoxLayout();
+        brandRow->setContentsMargins(4, 0, 0, 0);
+        brandRow->setSpacing(10);
+
+        auto* logo = new QLabel(sidebar);
+        logo->setObjectName(QStringLiteral("iamnxSidebarLogo"));
+        logo->setPixmap(APPLICATION->logo().pixmap(QSize(40, 40)));
+        logo->setFixedSize(40, 40);
+        logo->setScaledContents(true);
+        brandRow->addWidget(logo);
+
+        auto* brandColumn = new QVBoxLayout();
+        brandColumn->setContentsMargins(0, 0, 0, 0);
+        brandColumn->setSpacing(0);
+
+        auto* brandName = new QLabel(tr("IAMNX"), sidebar);
+        brandName->setObjectName(QStringLiteral("iamnxSidebarName"));
+        auto* brandTag = new QLabel(tr("LAUNCHER"), sidebar);
+        brandTag->setObjectName(QStringLiteral("iamnxSidebarTag"));
+        brandColumn->addWidget(brandName);
+        brandColumn->addWidget(brandTag);
+
+        brandRow->addLayout(brandColumn);
+        brandRow->addStretch();
+        sidebarLayout->addLayout(brandRow);
+    }
+
+    sidebarLayout->addSpacing(22);
+
+    auto addSection = [&](const QString& title) {
+        auto* label = new QLabel(title, sidebar);
+        label->setObjectName(QStringLiteral("iamnxNavSection"));
+        sidebarLayout->addWidget(label);
+    };
+
+    auto makeNavButton = [&](QAction* action, const QString& fallbackIcon, bool useMenu) {
+        auto* button = new QPushButton(sidebar);
+        button->setObjectName(QStringLiteral("iamnxNavButton"));
+        button->setCursor(Qt::PointingHandCursor);
+        button->setIconSize(QSize(18, 18));
+        button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        button->setMinimumHeight(38);
+
+        auto sync = [button, action, fallbackIcon, useMenu] {
+            button->setText(action->text());
+            button->setIcon(action->icon().isNull() ? QIcon::fromTheme(fallbackIcon) : action->icon());
+            button->setEnabled(action->isEnabled());
+            button->setVisible(action->isVisible());
+            button->setToolTip(action->toolTip().isEmpty() ? action->text() : action->toolTip());
+            if (useMenu && action->menu())
+                button->setMenu(action->menu());
+        };
+
+        connect(action, &QAction::changed, button, sync);
+        if (!useMenu || !action->menu())
+            connect(button, &QPushButton::clicked, action, &QAction::trigger);
+        sync();
+        sidebarLayout->addWidget(button);
+        return button;
+    };
+
+    addSection(tr("LIBRARY"));
+
+    {
+        auto* libraryButton = new QPushButton(tr("Library"), sidebar);
+        libraryButton->setObjectName(QStringLiteral("iamnxNavButtonActive"));
+        libraryButton->setIcon(QIcon::fromTheme(QStringLiteral("instances")));
+        libraryButton->setIconSize(QSize(18, 18));
+        libraryButton->setCursor(Qt::PointingHandCursor);
+        libraryButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        libraryButton->setMinimumHeight(38);
+        connect(libraryButton, &QPushButton::clicked, this, [this] { view->setFocus(); });
+        sidebarLayout->addWidget(libraryButton);
+    }
+
+    makeNavButton(ui->actionAddInstance, QStringLiteral("new"), false);
+    makeNavButton(ui->actionLaunchInstance, QStringLiteral("launch"), false);
+
+    sidebarLayout->addSpacing(16);
+    addSection(tr("ACCOUNT"));
+    makeNavButton(ui->actionAccountsButton, QStringLiteral("noaccount"), true);
+    makeNavButton(ui->actionManageSkins, QStringLiteral("skins"), false);
+
+    sidebarLayout->addSpacing(16);
+    addSection(tr("SYSTEM"));
+    makeNavButton(ui->actionFoldersButton, QStringLiteral("folder"), true);
+    makeNavButton(ui->actionSettings, QStringLiteral("settings"), false);
+    makeNavButton(ui->actionHelpButton, QStringLiteral("help"), true);
+
+    sidebarLayout->addStretch(1);
+
+    {
+        auto* moreButton = new QPushButton(tr("More"), sidebar);
+        moreButton->setObjectName(QStringLiteral("iamnxNavButton"));
+        moreButton->setIcon(QIcon::fromTheme(QStringLiteral("more")));
+        moreButton->setIconSize(QSize(18, 18));
+        moreButton->setCursor(Qt::PointingHandCursor);
+        moreButton->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
+        moreButton->setMinimumHeight(38);
+
+        auto* moreMenu = new QMenu(moreButton);
+        auto* fileMenu = moreMenu->addMenu(tr("File"));
+        fileMenu->addActions(ui->fileMenu->actions());
+        auto* editMenu = moreMenu->addMenu(tr("Edit"));
+        editMenu->addActions(ui->editMenu->actions());
+        auto* viewMenu = moreMenu->addMenu(tr("View"));
+        viewMenu->addActions(ui->viewMenu->actions());
+        moreMenu->addSeparator();
+        moreMenu->addAction(ui->actionViewLog);
+        moreMenu->addAction(ui->actionCheckUpdate);
+        moreMenu->addAction(ui->actionOpenWiki);
+        moreMenu->addAction(ui->actionAbout);
+
+        moreButton->setMenu(moreMenu);
+        sidebarLayout->addWidget(moreButton);
+    }
+
+    {
+        auto* version = new QLabel(tr("Version %1").arg(BuildConfig.printableVersionString()), sidebar);
+        version->setObjectName(QStringLiteral("iamnxVersionLabel"));
+        version->setAlignment(Qt::AlignCenter);
+        sidebarLayout->addWidget(version);
+    }
+
+    shellLayout->addWidget(sidebar);
+
+    // ---------------------------------------------------------------- content
+    auto* content = new QWidget(shell);
+    content->setObjectName(QStringLiteral("iamnxContent"));
+
+    auto* contentLayout = new QVBoxLayout(content);
+    contentLayout->setContentsMargins(30, 26, 30, 18);
+    contentLayout->setSpacing(16);
+
+    {
+        auto* headerRow = new QHBoxLayout();
+        headerRow->setSpacing(12);
+
+        auto* titleColumn = new QVBoxLayout();
+        titleColumn->setSpacing(2);
+        auto* pageTitle = new QLabel(tr("Library"), content);
+        pageTitle->setObjectName(QStringLiteral("iamnxPageTitle"));
+        auto* pageSubtitle = new QLabel(tr("Your worlds, ready when you are."), content);
+        pageSubtitle->setObjectName(QStringLiteral("iamnxPageSubtitle"));
+        titleColumn->addWidget(pageTitle);
+        titleColumn->addWidget(pageSubtitle);
+
+        headerRow->addLayout(titleColumn);
+        headerRow->addStretch(1);
+
+        auto* addButton = new QToolButton(content);
+        addButton->setObjectName(QStringLiteral("iamnxPrimaryButton"));
+        addButton->setDefaultAction(ui->actionAddInstance);
+        addButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        addButton->setIconSize(QSize(16, 16));
+        addButton->setMinimumHeight(38);
+        addButton->setCursor(Qt::PointingHandCursor);
+        headerRow->addWidget(addButton);
+
+        contentLayout->addLayout(headerRow);
+    }
+
+    {
+        auto* hero = new QWidget(content);
+        hero->setObjectName(QStringLiteral("iamnxHero"));
+
+        auto* heroLayout = new QHBoxLayout(hero);
+        heroLayout->setContentsMargins(26, 22, 26, 22);
+        heroLayout->setSpacing(14);
+
+        auto* heroColumn = new QVBoxLayout();
+        heroColumn->setSpacing(4);
+
+        auto* heroTitle = new QLabel(tr("Ready to play?"), hero);
+        heroTitle->setObjectName(QStringLiteral("iamnxHeroTitle"));
+        auto* heroSubtitle = new QLabel(tr("Jump into an existing world or create a fresh instance in seconds."), hero);
+        heroSubtitle->setObjectName(QStringLiteral("iamnxHeroSubtitle"));
+        heroSubtitle->setWordWrap(true);
+
+        heroColumn->addWidget(heroTitle);
+        heroColumn->addWidget(heroSubtitle);
+        heroColumn->addStretch(1);
+        heroLayout->addLayout(heroColumn, 1);
+
+        auto* launchButton = new QToolButton(hero);
+        launchButton->setObjectName(QStringLiteral("iamnxHeroPrimaryButton"));
+        launchButton->setDefaultAction(ui->actionLaunchInstance);
+        launchButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        launchButton->setIconSize(QSize(18, 18));
+        launchButton->setMinimumHeight(42);
+        launchButton->setCursor(Qt::PointingHandCursor);
+        launchButton->setPopupMode(QToolButton::MenuButtonPopup);
+        heroLayout->addWidget(launchButton);
+
+        auto* browseButton = new QToolButton(hero);
+        browseButton->setObjectName(QStringLiteral("iamnxHeroSecondaryButton"));
+        browseButton->setDefaultAction(ui->actionViewInstanceFolder);
+        browseButton->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        browseButton->setIconSize(QSize(18, 18));
+        browseButton->setMinimumHeight(42);
+        browseButton->setCursor(Qt::PointingHandCursor);
+        heroLayout->addWidget(browseButton);
+
+        contentLayout->addWidget(hero);
+    }
+
+    {
+        auto* sectionRow = new QHBoxLayout();
+        sectionRow->setSpacing(8);
+
+        auto* sectionTitle = new QLabel(tr("Instances"), content);
+        sectionTitle->setObjectName(QStringLiteral("iamnxSectionTitle"));
+        sectionRow->addWidget(sectionTitle);
+        sectionRow->addStretch(1);
+
+        auto addPill = [&](QAction* action, const QString& fallbackIcon) {
+            auto* button = new QToolButton(content);
+            button->setObjectName(QStringLiteral("iamnxPillButton"));
+            button->setDefaultAction(action);
+            button->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+            button->setIconSize(QSize(14, 14));
+            button->setMinimumHeight(32);
+            button->setCursor(Qt::PointingHandCursor);
+            if (action->icon().isNull())
+                button->setIcon(QIcon::fromTheme(fallbackIcon));
+            sectionRow->addWidget(button);
+            return button;
+        };
+
+        addPill(ui->actionEditInstance, QStringLiteral("edit"));
+        addPill(ui->actionViewSelectedInstFolder, QStringLiteral("folder"));
+
+        auto* instanceMore = new QToolButton(content);
+        instanceMore->setObjectName(QStringLiteral("iamnxPillButton"));
+        instanceMore->setText(tr("More"));
+        instanceMore->setIcon(QIcon::fromTheme(QStringLiteral("more")));
+        instanceMore->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+        instanceMore->setIconSize(QSize(14, 14));
+        instanceMore->setMinimumHeight(32);
+        instanceMore->setCursor(Qt::PointingHandCursor);
+        instanceMore->setPopupMode(QToolButton::InstantPopup);
+
+        auto* instanceMenu = new QMenu(instanceMore);
+        instanceMenu->addAction(ui->actionChangeInstGroup);
+        instanceMenu->addAction(ui->actionChangeInstIcon);
+        instanceMenu->addAction(ui->actionRenameInstance);
+        instanceMenu->addSeparator();
+        instanceMenu->addAction(ui->actionExportInstance);
+        instanceMenu->addAction(ui->actionCopyInstance);
+        instanceMenu->addAction(ui->actionCreateInstanceShortcut);
+        instanceMenu->addSeparator();
+        instanceMenu->addAction(ui->actionKillInstance);
+        instanceMenu->addAction(ui->actionDeleteInstance);
+        instanceMore->setMenu(instanceMenu);
+
+        sectionRow->addWidget(instanceMore);
+        contentLayout->addLayout(sectionRow);
+    }
+
+    view->setObjectName(QStringLiteral("iamnxInstanceView"));
+    contentLayout->addWidget(view, 1);
+
+    shellLayout->addWidget(content, 1);
+    ui->horizontalLayout->addWidget(shell);
+}
 
 void MainWindow::retranslateUi()
 {
@@ -523,6 +812,14 @@ QMenu* MainWindow::createPopupMenu()
     filteredMenu->addAction(ui->actionLockToolbars);
 
     return filteredMenu;
+}
+
+void MainWindow::showEvent(QShowEvent* event)
+{
+    // restoreState() may bring the legacy toolbars back after construction,
+    // so enforce the dashboard layout every time the window is shown.
+    updateMainToolBar();
+    QMainWindow::showEvent(event);
 }
 void MainWindow::setStatusBarVisibility(bool state)
 {
@@ -625,8 +922,15 @@ void MainWindow::showInstanceContextMenu(const QPoint& pos)
 
 void MainWindow::updateMainToolBar()
 {
-    ui->menuBar->setVisible(APPLICATION->settings()->get("MenuBarInsteadOfToolBar").toBool());
-    ui->mainToolBar->setVisible(ui->menuBar->isNativeMenuBar() || !APPLICATION->settings()->get("MenuBarInsteadOfToolBar").toBool());
+    // The legacy menu bar and toolbars are kept alive for compatibility,
+    // but the dashboard shell in the central widget is now the primary UI.
+#ifdef Q_OS_MAC
+    ui->menuBar->setVisible(true);
+#else
+    ui->menuBar->setVisible(false);
+#endif
+    ui->mainToolBar->setVisible(false);
+    ui->instanceToolBar->setVisible(false);
 }
 
 void MainWindow::updateLaunchButton()
