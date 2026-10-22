@@ -586,8 +586,10 @@ void AccountList::setListFilePath(QString path, bool autosave)
 
 bool AccountList::anyAccountIsValid()
 {
+    // IAMNXLauncher is offline-first: a local account is a usable account on its
+    // own, even if no Microsoft account that owns Minecraft has been added.
     for (auto account : m_accounts) {
-        if (account->ownsMinecraft()) {
+        if (account->ownsMinecraft() || account->accountType() == AccountType::Offline) {
             return true;
         }
     }

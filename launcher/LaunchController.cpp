@@ -39,6 +39,7 @@
 #include "launch/steps/PrintServers.h"
 #include "minecraft/auth/AccountData.h"
 #include "minecraft/auth/AccountList.h"
+#include "minecraft/auth/MinecraftAccount.h"
 
 #include "net/NetUtils.h"
 #include "ui/InstanceWindow.h"
@@ -94,18 +95,44 @@ void LaunchController::decideAccount()
     }
 
     if (!accounts->anyAccountIsValid()) {
-        // Tell the user they need to log in at least one account in order to play.
-        auto reply = CustomMessageBox::selectable(m_parentWidget, tr("No Accounts"),
-                                                  tr("In order to play Minecraft, you must have at least one Microsoft "
-                                                     "account which owns Minecraft logged in. "
-                                                     "Would you like to open the account manager to add an account now?"),
-                                                  QMessageBox::Information, QMessageBox::Yes | QMessageBox::No)
-                         ->exec();
+        // Let the user pick how they want to play. Offline accounts work without any
+        // Microsoft sign-in, so they are offered first.
+        QMessageBox box(m_parentWidget);
+        box.setWindowTitle(tr("No Accounts"));
+        box.setIcon(QMessageBox::Information);
+        box.setText(tr("You don't have a usable Minecraft account yet."));
+        box.setInformativeText(tr("You can play right away with an offline (local) account, no Microsoft sign-in required.\n"
+                                  "If you own Minecraft, you can also add a Microsoft account."));
 
-        if (reply == QMessageBox::Yes) {
-            // Open the account manager.
-            APPLICATION->ShowGlobalSettings(m_parentWidget, "accounts");
-        } else if (reply == QMessageBox::No) {
+        auto* offlineButton = box.addButton(tr("Add Offline Account"), QMessageBox::AcceptRole);
+        QAbstractButton* msaButton = nullptr;
+        if (APPLICATION->capabilities().testAnyFlags(Application::SupportsMSA)) {
+            msaButton = box.addButton(tr("Add Microsoft Account"), QMessageBox::ActionRole);
+        }
+        box.addButton(QMessageBox::Cancel);
+        box.exec();
+
+        if (box.clickedButton() == offlineButton) {
+            ChooseOfflineNameDialog dialog(tr("Please enter your desired username to add your offline account."), m_parentWidget);
+            if (dialog.exec() != QDialog::Accepted) {
+                return;
+            }
+            const auto account = MinecraftAccount::createOffline(dialog.getUsername());
+            if (!account) {
+                return;
+            }
+            accounts->addAccount(account);
+            accounts->setDefaultAccount(account);
+            m_accountToUse = account;
+        } else if (msaButton != nullptr && box.clickedButton() == msaButton) {
+            const auto account = MSALoginDialog::newAccount(m_parentWidget);
+            if (!account) {
+                return;
+            }
+            accounts->addAccount(account);
+            accounts->setDefaultAccount(account);
+            m_accountToUse = account;
+        } else {
             // Do not open "profile select" dialog.
             return;
         }
@@ -137,6 +164,13 @@ LaunchDecision LaunchController::decideLaunchMode()
 
     const auto* accounts = APPLICATION->accounts();
     MinecraftAccountPtr accountToCheck = nullptr;
+
+    // Offline accounts do not need a Microsoft account that owns Minecraft:
+    // launch straight into offline mode with the selected local profile.
+    if (m_accountToUse->accountType() == AccountType::Offline) {
+        m_actualLaunchMode = LaunchMode::Offline;
+        return LaunchDecision::Continue;
+    }
 
     if (m_accountToUse->accountType() != AccountType::Offline) {
         accountToCheck = m_accountToUse->ownsMinecraft() ? m_accountToUse : nullptr;

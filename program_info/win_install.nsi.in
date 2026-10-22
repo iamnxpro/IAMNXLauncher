@@ -8,10 +8,12 @@ AllowSkipFiles off
 Unicode true
 
 Name "@Launcher_DisplayName@"
-InstallDir "$LOCALAPPDATA\Programs\@Launcher_CommonName@"
+InstallDir "$LOCALAPPDATA\Programs\@Launcher_DisplayName@"
 InstallDirRegKey HKCU "Software\@Launcher_CommonName@" "InstallDir"
 RequestExecutionLevel user
-OutFile "../@Launcher_CommonName@-Setup.exe"
+OutFile "../@Launcher_DisplayName@-Setup.exe"
+
+SetCompressor /SOLID lzma
 
 !define MUI_ICON "../@Launcher_Branding_ICO@"
 
@@ -376,7 +378,6 @@ Section "@Launcher_DisplayName@"
 
   File "@Launcher_APP_BINARY_NAME@.exe"
   File "@Launcher_APP_BINARY_NAME@_filelink.exe"
-  File "@Launcher_APP_BINARY_NAME@_updater.exe"
   File "qt.conf"
   File "qtlogging.ini"
   File *.dll
@@ -394,13 +395,9 @@ Section "@Launcher_DisplayName@"
   WriteRegStr HKCU Software\Classes\curseforge "URL Protocol" ""
   WriteRegStr HKCU Software\Classes\curseforge\shell\open\command "" '"$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" "%1"'
 
-  ; Write the URL Handler into registry for prismlauncher
+  ; Write the URL Handler into registry for importing instances/modpacks
   WriteRegStr HKCU Software\Classes\@Launcher_APP_BINARY_NAME@ "URL Protocol" ""
   WriteRegStr HKCU Software\Classes\@Launcher_APP_BINARY_NAME@\shell\open\command "" '"$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" "%1"'
-
-  ; Write the URL Handler into registry for prismlauncher import
-  WriteRegStr HKCU Software\Classes\prismlauncher "URL Protocol" ""
-  WriteRegStr HKCU Software\Classes\prismlauncher\shell\open\command "" '"$INSTDIR\@Launcher_APP_BINARY_NAME@.exe" "%1"'
 
   ; Write the uninstall keys for Windows
   ; https://learn.microsoft.com/en-us/windows/win32/msi/uninstall-registry-key
@@ -473,7 +470,6 @@ Section "Uninstall"
 
   Delete $INSTDIR\@Launcher_APP_BINARY_NAME@.exe
   Delete $INSTDIR\@Launcher_APP_BINARY_NAME@_filelink.exe
-  Delete $INSTDIR\@Launcher_APP_BINARY_NAME@_updater.exe
   Delete $INSTDIR\qt.conf
   Delete $INSTDIR\*.dll
 

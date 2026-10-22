@@ -66,10 +66,13 @@
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QProgressDialog>
+#include <QPixmap>
 #include <QShortcut>
+#include <QSize>
 #include <QStatusBar>
 #include <QToolBar>
 #include <QToolButton>
+#include <QVBoxLayout>
 #include <QWidget>
 #include <QWidgetAction>
 #include <memory>
@@ -254,6 +257,37 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent), ui(new Ui::MainWi
     updateMainToolBar();
     // OSX magic.
     setUnifiedTitleAndToolBarOnMac(true);
+
+    // IAMNX branding at the start of the main toolbar.
+    {
+        auto* brand = new QWidget(this);
+        brand->setObjectName(QStringLiteral("iamnxBrand"));
+
+        auto* brandLayout = new QHBoxLayout(brand);
+        brandLayout->setContentsMargins(4, 0, 14, 0);
+        brandLayout->setSpacing(8);
+
+        auto* logo = new QLabel(brand);
+        logo->setObjectName(QStringLiteral("iamnxBrandIcon"));
+        logo->setPixmap(APPLICATION->logo().pixmap(QSize(24, 24)));
+        logo->setFixedSize(24, 24);
+        logo->setScaledContents(true);
+        brandLayout->addWidget(logo);
+
+        auto* nameColumn = new QVBoxLayout();
+        nameColumn->setContentsMargins(0, 0, 0, 0);
+        nameColumn->setSpacing(0);
+
+        auto* name = new QLabel(tr("IAMNX"), brand);
+        name->setObjectName(QStringLiteral("iamnxBrandName"));
+        auto* tag = new QLabel(tr("LAUNCHER"), brand);
+        tag->setObjectName(QStringLiteral("iamnxBrandTag"));
+        nameColumn->addWidget(name);
+        nameColumn->addWidget(tag);
+
+        brandLayout->addLayout(nameColumn);
+        ui->mainToolBar->insertWidget(ui->actionAddInstance, brand);
+    }
 
     // Global shortcuts
     {

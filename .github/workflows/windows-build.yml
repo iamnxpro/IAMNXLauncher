@@ -107,20 +107,47 @@ jobs:
           # paths derived from CMAKE_INSTALL_PREFIX.
           cmake --install build --config Release
 
-      - name: Mark as portable
-        shell: pwsh
-        run: |
-          # "portable.txt" next to the executable keeps data and downloaded jars
-          # in the same folder. Delete it to use the normal per-user data folder.
-          New-Item -ItemType File -Path install/portable.txt -Force | Out-Null
-
       - name: Show what was built
         shell: pwsh
         run: Get-ChildItem install -Recurse -File | Select-Object FullName, Length
 
-      - name: Upload artifact
+      - name: Build installer
+        shell: pwsh
+        env:
+          # NScurl lets the installer download the Visual C++ runtime when needed.
+          # Pinned so the build is reproducible; verified before use.
+          NSCURL_VERSION: "v24.9.26.122"
+          NSCURL_SHA256: "AEE6C4BE3CB6455858E9C1EE4B3AFE0DB9960FA03FE99CCDEDC28390D57CCBB0"
+        run: |
+          New-Item -ItemType Directory -Force NSISPlugins | Out-Null
+          Invoke-WebRequest "https://github.com/negrutiu/nsis-nscurl/releases/download/$env:NSCURL_VERSION/NScurl.zip" -OutFile "NSISPlugins/NScurl.zip"
+          $hash = (Get-FileHash "NSISPlugins/NScurl.zip" -Algorithm Sha256).Hash
+          if ($hash -ne $env:NSCURL_SHA256) {
+            throw "NScurl.zip SHA-256 mismatch: $hash"
+          }
+          Expand-Archive -Path "NSISPlugins/NScurl.zip" -DestinationPath "NSISPlugins/NScurl" -Force
+
+          # install/ is the payload; win_install.nsi references its files relative
+          # to the working directory and writes the setup executable to the repo root.
+          Push-Location install
+          makensis -NOCD "${{ github.workspace }}/build/program_info/win_install.nsi"
+          Pop-Location
+
+          if (-not (Test-Path "IAMNXLauncher-Setup.exe")) {
+            throw "Installer was not created"
+          }
+          Get-Item "IAMNXLauncher-Setup.exe" | Select-Object Name, Length
+
+      - name: Upload portable ZIP
         uses: actions/upload-artifact@v4
         with:
           name: iamnxlauncher-windows-x64
           path: install/
+          if-no-files-found: error
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: iamnxlauncher-windows-x64-setup
+          path: IAMNXLauncher-Setup.exe
           if-no-files-found: error
