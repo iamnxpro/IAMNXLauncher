@@ -50,6 +50,10 @@
 #include "gamemode_client.h"
 #endif
 
+// Defined here so that LocalAuthServer only has to be a forward declaration in
+// the header (the member is a std::unique_ptr).
+LauncherPartLaunch::~LauncherPartLaunch() = default;
+
 LauncherPartLaunch::LauncherPartLaunch(LaunchTask* parent)
     : LaunchStep(parent)
     , m_process(parent->instance()->getJavaVersion().defaultsToUtf8() ? QStringConverter::Utf8 : QStringConverter::System)

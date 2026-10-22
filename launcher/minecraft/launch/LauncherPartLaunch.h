@@ -30,7 +30,7 @@ class LauncherPartLaunch : public LaunchStep {
     Q_OBJECT
    public:
     explicit LauncherPartLaunch(LaunchTask* parent);
-    virtual ~LauncherPartLaunch() = default;
+    virtual ~LauncherPartLaunch();
 
     virtual void executeTask();
     virtual bool abort();
