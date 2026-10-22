@@ -1,0 +1,171 @@
+// SPDX-License-Identifier: GPL-3.0-only
+/*
+ *  Prism Launcher - Minecraft Launcher
+ *  Copyright (C) 2022 Sefa Eyeoglu <contact@scrumplex.net>
+ *
+ *  This program is free software: you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation, version 3.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * This file incorporates work covered by the following copyright and
+ * permission notice:
+ *
+ *      Copyright 2013-2021 MultiMC Contributors
+ *
+ *      Licensed under the Apache License, Version 2.0 (the "License");
+ *      you may not use this file except in compliance with the License.
+ *      You may obtain a copy of the License at
+ *
+ *          http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *      Unless required by applicable law or agreed to in writing, software
+ *      distributed under the License is distributed on an "AS IS" BASIS,
+ *      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *      See the License for the specific language governing permissions and
+ *      limitations under the License.
+ */
+
+#include "ProfileUtils.h"
+#include <qfileinfo.h>
+#include <QDebug>
+#include "Json.h"
+#include "minecraft/OneSixVersionFormat.h"
+#include "minecraft/VersionFilterData.h"
+
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QSaveFile>
+#include <utility>
+
+namespace {
+
+static const int currentOrderFileVersion = 1;
+
+VersionFilePtr createErrorVersionFile(QString fileId, QString filepath, const QString& error)
+{
+    auto outError = std::make_shared<VersionFile>();
+    outError->uid = outError->name = std::move(fileId);
+    // outError->filename = filepath;
+    outError->addProblem(ProblemSeverity::Error, error);
+    return outError;
+}
+
+VersionFilePtr guardedParseJson(const QJsonDocument& doc, const QString& fileId, const QString& filepath, const bool& requireOrder)
+{
+    auto rsp = OneSixVersionFormat::versionFileFromJson(doc, filepath, requireOrder);
+    if (!rsp) {
+        return createErrorVersionFile(fileId, filepath, rsp.error());
+    }
+    return rsp.value();
+}
+
+}  // namespace
+namespace ProfileUtils {
+
+bool readOverrideOrders(QString path, PatchOrder& order)
+{
+    if (!QFileInfo::exists(path)) {
+        qWarning() << "Order file doesn't exist. Ignoring.";
+        return false;
+    }
+
+    auto parse = [&path, &order] -> Result<> {
+        // and it's valid JSON
+        auto obj = Json::requireDocument(path, "order file").and_then([](const auto& v) { return Json::requireObject(v); });
+        TRY(obj)
+        // and then read it and process it if all above is true.
+        // check order file version.
+        auto version = Json::requireInteger(obj->value("version"));
+        TRY(version)
+        if (version != currentOrderFileVersion) {
+            return std::unexpected(QObject::tr("Invalid order file version, expected %1").arg(currentOrderFileVersion));
+        }
+        auto orderArray = Json::requireArray(obj->value("order"));
+        TRY(orderArray)
+        for (auto item : orderArray.value()) {
+            auto v = Json::requireString(item);
+            TRY(v)
+            order.append(v.value());
+        }
+        return {};
+    };
+    if (auto rsp = parse(); !rsp) {
+        qCritical() << "Couldn't parse" << path << ":" << rsp.error();
+        qWarning() << "Ignoring overridden order";
+        order.clear();
+        return false;
+    }
+
+    return true;
+}
+
+VersionFilePtr parseJsonFile(const QFileInfo& fileInfo, const bool requireOrder)
+{
+    QFile file(fileInfo.absoluteFilePath());
+    if (!file.open(QFile::ReadOnly)) {
+        auto errorStr = QObject::tr("Unable to open the version file %1: %2.").arg(fileInfo.fileName(), file.errorString());
+        return createErrorVersionFile(fileInfo.completeBaseName(), fileInfo.absoluteFilePath(), errorStr);
+    }
+    QJsonParseError error;
+    auto data = file.readAll();
+    QJsonDocument doc = QJsonDocument::fromJson(data, &error);
+    file.close();
+    if (error.error != QJsonParseError::NoError) {
+        int line = 1;
+        int column = 0;
+        for (int i = 0; i < error.offset; i++) {
+            if (data[i] == '\n') {
+                line++;
+                column = 0;
+                continue;
+            }
+            column++;
+        }
+        auto errorStr = QObject::tr("Unable to process the version file %1: %2 at line %3 column %4.")
+                            .arg(fileInfo.fileName(), error.errorString())
+                            .arg(line)
+                            .arg(column);
+        return createErrorVersionFile(fileInfo.completeBaseName(), fileInfo.absoluteFilePath(), errorStr);
+    }
+    return guardedParseJson(doc, fileInfo.completeBaseName(), fileInfo.absoluteFilePath(), requireOrder);
+}
+
+bool saveJsonFile(const QJsonDocument& doc, const QString& filename)
+{
+    auto data = doc.toJson();
+    QSaveFile jsonFile(filename);
+    if (!jsonFile.open(QIODevice::WriteOnly)) {
+        qWarning() << "Couldn't open" << filename << "for writing:" << jsonFile.errorString();
+        jsonFile.cancelWriting();
+        return false;
+    }
+    jsonFile.write(data);
+    if (!jsonFile.commit()) {
+        qWarning() << "Couldn't save" << filename << "error:" << jsonFile.errorString();
+        return false;
+    }
+    return true;
+}
+
+void removeLwjglFromPatch(VersionFilePtr patch)
+{
+    auto filter = [](QList<LibraryPtr>& libs) {
+        QList<LibraryPtr> filteredLibs;
+        for (auto lib : libs) {
+            if (!g_VersionFilterData.lwjglWhitelist.contains(lib->artifactPrefix())) {
+                filteredLibs.append(lib);
+            }
+        }
+        libs = filteredLibs;
+    };
+    filter(patch->libraries);
+}
+}  // namespace ProfileUtils

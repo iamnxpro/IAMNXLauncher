@@ -1,0 +1,31 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B0710"/>
+      <stop offset="100%" stop-color="#1A0F2E"/>
+    </linearGradient>
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9B5DE5"/>
+      <stop offset="100%" stop-color="#5A2FA8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bgGradDark)"/>
+  <rect x="8" y="8" width="496" height="496" rx="106" fill="none" stroke="#9B5DE5" stroke-width="6" opacity="0.35"/>
+
+  <!-- Launcher play/rocket accent shape behind monogram -->
+  <path d="M 256 96 L 336 190 L 296 190 L 296 330 L 216 330 L 216 190 L 176 190 Z"
+        fill="url(#purpleGrad)" opacity="0.22"/>
+
+  <!-- NX Monogram -->
+  <g>
+    <path d="M 108 372 L 108 156 L 158 156 L 246 300 L 246 156 L 296 156 L 296 372 L 246 372 L 158 228 L 158 372 Z"
+          fill="url(#purpleGrad)"/>
+    <path d="M 320 156 L 378 156 L 412 214 L 446 156 L 404 264 L 446 372 L 388 372 L 352 308 L 316 372 L 316 156 L 320 156 L 360 264 Z"
+          fill="url(#purpleGrad)"/>
+  </g>
+
+  <!-- Small underline accent -->
+  <rect x="150" y="400" width="212" height="14" rx="7" fill="url(#purpleGrad)"/>
+</svg>

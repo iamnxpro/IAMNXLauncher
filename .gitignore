@@ -1,0 +1,25 @@
+# Build output
+/build/
+/install/
+/External/
+
+# vcpkg (upstream tracks this as a git submodule; CI fetches it on demand)
+/cmake/vcpkg/
+
+# IDE and editor files
+/.vs/
+/.vscode/
+/.idea/
+*.user
+*.suo
+*.swp
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+compile_commands.json
+
+# OS files
+Thumbs.db
+.DS_Store

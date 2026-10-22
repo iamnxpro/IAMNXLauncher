@@ -1,0 +1,126 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    name: Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 90
+
+    env:
+      # Required by the "base" CMake preset, which reads these from the
+      # environment. Keep in sync with CMakePresets.json.
+      BUILD_PLATFORM: windows
+      ARTIFACT_NAME: iamnxlauncher-windows-x64
+      # Reuse the compiled vcpkg ports between runs.
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg-cache,readwrite
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Set up Java
+        # The bundled Java launcher part is compiled with "-source 7 -target 7".
+        # javac dropped that in JDK 20, so stay on 17.
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          arch: win64_msvc2022_64
+          modules: 'qtimageformats qtnetworkauth'
+          cache: true
+          setup-python: false
+
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/vcpkg-cache
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          # cmake/vcpkg is a git submodule upstream, but this repository does not
+          # track it. Fetch a full clone so the baseline commit pinned in
+          # vcpkg-configuration.json is available.
+          if (-not (Test-Path "cmake/vcpkg/scripts/buildsystems/vcpkg.cmake")) {
+            git clone --quiet https://github.com/microsoft/vcpkg.git cmake/vcpkg
+          }
+          if (-not (Test-Path "cmake/vcpkg/vcpkg.exe")) {
+            & "cmake/vcpkg/bootstrap-vcpkg.bat" -disableMetrics
+          }
+          & "cmake/vcpkg/vcpkg.exe" version
+
+      - name: Show tool versions
+        shell: pwsh
+        run: |
+          cmake --version
+          ninja --version
+          java -version
+          & "cmake/vcpkg/vcpkg.exe" version
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          # Tests and LTO are not needed to produce the launcher binary and only
+          # make the build slower and more fragile.
+          cmake --preset windows_msvc -DBUILD_TESTING=OFF -DENABLE_LTO=OFF
+
+      - name: Build
+        shell: pwsh
+        run: cmake --build --preset windows_msvc --config Release
+
+      - name: Install
+        shell: pwsh
+        run: |
+          # Install to the prefix from the preset (${sourceDir}/install). Do not
+          # pass --prefix: launcher/CMakeLists.txt also installs with absolute
+          # paths derived from CMAKE_INSTALL_PREFIX.
+          cmake --install build --config Release
+
+      - name: Mark as portable
+        shell: pwsh
+        run: |
+          # "portable.txt" next to the executable keeps data and downloaded jars
+          # in the same folder. Delete it to use the normal per-user data folder.
+          New-Item -ItemType File -Path install/portable.txt -Force | Out-Null
+
+      - name: Show what was built
+        shell: pwsh
+        run: Get-ChildItem install -Recurse -File | Select-Object FullName, Length
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iamnxlauncher-windows-x64
+          path: install/
+          if-no-files-found: error
