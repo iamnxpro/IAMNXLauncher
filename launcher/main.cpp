@@ -56,7 +56,9 @@ int main(int argc, char* argv[])
             Q_INIT_RESOURCE(multimc);
             Q_INIT_RESOURCE(backgrounds);
             Q_INIT_RESOURCE(documents);
-            Q_INIT_RESOURCE(prismlauncher);
+            // Named after program_info/iamnxlauncher.qrc, which is generated
+            // from Launcher_APP_BINARY_NAME by program_info/CMakeLists.txt.
+            Q_INIT_RESOURCE(iamnxlauncher);
 
             Q_INIT_RESOURCE(pe_dark);
             Q_INIT_RESOURCE(pe_light);
