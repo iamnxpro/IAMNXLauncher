@@ -50,6 +50,7 @@
 #include "tools/GenericProfiler.h"
 #include "ui/InstanceWindow.h"
 #include "ui/MainWindow.h"
+#include "orbital/OrbitalWindow.h"
 #include "ui/ToolTipFilter.h"
 #include "ui/ViewLogWindow.h"
 
@@ -728,6 +729,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
 
         // Language
         m_settings->registerSetting("Language", QString());
+        m_settings->registerSetting("OrbitalLanguage", QString());
         m_settings->registerSetting("UseSystemLocale", false);
 
         // Console
@@ -1708,24 +1710,31 @@ void Application::ShowGlobalSettings(class QWidget* parent, QString openPage)
 MainWindow* Application::showMainWindow(bool minimized)
 {
     if (m_mainWindow) {
-        m_mainWindow->setWindowState(m_mainWindow->windowState() & ~Qt::WindowMinimized);
-        m_mainWindow->raise();
-        m_mainWindow->activateWindow();
+        if (m_orbitalWindow) {
+            m_orbitalWindow->raise();
+        } else {
+            m_mainWindow->setWindowState(m_mainWindow->windowState() & ~Qt::WindowMinimized);
+            m_mainWindow->raise();
+            m_mainWindow->activateWindow();
+        }
     } else {
         m_mainWindow = new MainWindow();
         m_mainWindow->restoreState(QByteArray::fromBase64(APPLICATION->settings()->get("MainWindowState").toString().toUtf8()));
         m_mainWindow->restoreGeometry(QByteArray::fromBase64(APPLICATION->settings()->get("MainWindowGeometry").toString().toUtf8()));
 
-        if (minimized) {
-            m_mainWindow->showMinimized();
-        } else {
-            m_mainWindow->show();
-        }
+        // The orbital Qt Quick 3D window is the only visible front end. MainWindow
+        // stays hidden and supplies the existing dialogs, instance creation and
+        // account management workflows.
+        m_mainWindow->hide();
 
         m_mainWindow->checkInstancePathForProblems();
         connect(this, &Application::updateAllowedChanged, m_mainWindow, &MainWindow::updatesAllowedChanged);
         connect(m_mainWindow, &MainWindow::isClosing, this, &Application::on_windowClose);
         m_openWindows++;
+
+        m_orbitalWindow = new OrbitalWindow(m_mainWindow, this);
+        connect(m_orbitalWindow, &OrbitalWindow::closed, this, [this]() { m_orbitalWindow = nullptr; });
+        m_orbitalWindow->show(minimized);
     }
     return m_mainWindow;
 }

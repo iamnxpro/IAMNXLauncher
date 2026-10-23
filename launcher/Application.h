@@ -55,6 +55,7 @@ class LaunchController;
 class LocalPeer;
 class InstanceWindow;
 class MainWindow;
+class OrbitalWindow;
 class ViewLogWindow;
 class SetupWizard;
 class GenericPageProvider;
@@ -293,6 +294,9 @@ class Application : public QApplication {
 
     // main window, if any
     MainWindow* m_mainWindow = nullptr;
+
+    // visible orbital shell, if any
+    OrbitalWindow* m_orbitalWindow = nullptr;
 
     // log window, if any
     ViewLogWindow* m_viewLogWindow = nullptr;

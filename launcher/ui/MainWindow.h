@@ -83,6 +83,15 @@ class MainWindow : public QMainWindow {
     void updatesAllowedChanged(bool allowed);
 
     void processURLs(QList<QUrl> urls);
+
+    // Public entry points used by the orbital Qt Quick shell. MainWindow is kept
+    // hidden and acts as the dialog/action backend for the new front end.
+    void requestAddInstance();
+    void requestManageAccounts();
+    void requestManageSkins();
+    void requestSettings();
+    void requestHelp();
+
    signals:
     void isClosing();
 

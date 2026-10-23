@@ -451,6 +451,15 @@ set(TRANSLATIONS_SOURCES
     translations/POTranslator.cpp
 )
 
+set(ORBITAL_SOURCES
+    orbital/OrbitalBackend.h
+    orbital/OrbitalBackend.cpp
+    orbital/OrbitalWindow.h
+    orbital/OrbitalWindow.cpp
+    orbital/LanguageController.h
+    orbital/LanguageController.cpp
+)
+
 set(TOOLS_SOURCES
     # Tools
     tools/BaseExternalTool.cpp
@@ -1220,6 +1229,7 @@ qt_add_resources(LAUNCHER_RESOURCES
     resources/flat_white/flat_white.qrc
     resources/documents/documents.qrc
     resources/shaders/shaders.qrc
+    orbital/orbital.qrc
     "${CMAKE_CURRENT_BINARY_DIR}/../${Launcher_Branding_LogoQRC}"
 )
 
@@ -1242,7 +1252,7 @@ endif()
 ####### Targets ########
 
 # Add executable
-add_library(Launcher_logic STATIC ${LOGIC_SOURCES} ${LAUNCHER_SOURCES} ${LAUNCHER_RESOURCES})
+add_library(Launcher_logic STATIC ${LOGIC_SOURCES} ${LAUNCHER_SOURCES} ${LAUNCHER_RESOURCES} ${ORBITAL_SOURCES})
 target_include_directories(Launcher_logic PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_definitions(Launcher_logic PUBLIC LAUNCHER_APPLICATION)
 
@@ -1257,6 +1267,8 @@ target_link_libraries(Launcher_logic
     qdcss
     BuildConfig
     Qt${QT_VERSION_MAJOR}::Widgets
+    Qt${QT_VERSION_MAJOR}::Quick
+    Qt${QT_VERSION_MAJOR}::Quick3D
 )
 
 if(TARGET PkgConfig::libqrencode)
@@ -1479,7 +1491,7 @@ get_property(Launcher_TARGETS DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY BUI
 foreach(target ${Launcher_TARGETS})
     message(STATUS "Enabling all warnings as errors for target '${target}'")
     if (CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
-        target_compile_options(${target} PRIVATE /W4 /WX /permissive-)
+        target_compile_options(${target} PRIVATE /W4 /WX /permissive- /utf-8)
     else()
         target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
@@ -1501,7 +1513,7 @@ endif()
 # NOTE: it seems that this absolutely has to be here, and nowhere else.
 if(WIN32 OR (UNIX AND APPLE))
     if(WIN32)
-        set(QT_DEPLOY_TOOL_OPTIONS "--no-opengl-sw --no-quick-import --no-system-d3d-compiler --no-system-dxc-compiler --skip-plugin-types generic,networkinformation")
+        set(QT_DEPLOY_TOOL_OPTIONS "--no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler --skip-plugin-types generic,networkinformation --qmldir \\\"${CMAKE_CURRENT_SOURCE_DIR}/orbital/qml\\\"")
     endif()
 
     qt_generate_deploy_script(

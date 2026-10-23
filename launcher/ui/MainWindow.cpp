@@ -2145,3 +2145,28 @@ void MainWindow::refreshCurrentInstance()
     auto current = view->selectionModel()->currentIndex();
     instanceChanged(current, current);
 }
+
+void MainWindow::requestAddInstance()
+{
+    on_actionAddInstance_triggered();
+}
+
+void MainWindow::requestManageAccounts()
+{
+    on_actionManageAccounts_triggered();
+}
+
+void MainWindow::requestManageSkins()
+{
+    on_actionManageSkins_triggered();
+}
+
+void MainWindow::requestSettings()
+{
+    on_actionSettings_triggered();
+}
+
+void MainWindow::requestHelp()
+{
+    on_actionOpenWiki_triggered();
+}
