@@ -122,6 +122,20 @@ Item {
             border.width: newPin.activeFocus ? 1.5 : 1
             border.color: newPin.activeFocus ? "#FF5E1A" : "#3A241A"
 
+            Text {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                text: Lang.t("security.new", Lang.revision)
+                color: "#6D574B"
+                font.family: "Segoe UI"
+                font.pixelSize: 15
+                horizontalAlignment: Lang.rtl ? Text.AlignRight : Text.AlignLeft
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+                visible: newPin.text.length === 0
+            }
+
             TextInput {
                 id: newPin
                 anchors.fill: parent
@@ -136,8 +150,6 @@ Item {
                 selectByMouse: true
                 activeFocusOnTab: true
                 horizontalAlignment: Lang.rtl ? TextInput.AlignRight : TextInput.AlignLeft
-                placeholderText: Lang.t("security.new", Lang.revision)
-                placeholderTextColor: "#6D574B"
                 onAccepted: confirmPin.forceActiveFocus()
             }
         }
@@ -154,6 +166,20 @@ Item {
             border.width: confirmPin.activeFocus ? 1.5 : 1
             border.color: confirmPin.activeFocus ? "#FF5E1A" : "#3A241A"
 
+            Text {
+                anchors.fill: parent
+                anchors.leftMargin: 16
+                anchors.rightMargin: 16
+                text: Lang.t("security.confirm", Lang.revision)
+                color: "#6D574B"
+                font.family: "Segoe UI"
+                font.pixelSize: 15
+                horizontalAlignment: Lang.rtl ? Text.AlignRight : Text.AlignLeft
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+                visible: confirmPin.text.length === 0
+            }
+
             TextInput {
                 id: confirmPin
                 anchors.fill: parent
@@ -168,8 +194,6 @@ Item {
                 selectByMouse: true
                 activeFocusOnTab: true
                 horizontalAlignment: Lang.rtl ? TextInput.AlignRight : TextInput.AlignLeft
-                placeholderText: Lang.t("security.confirm", Lang.revision)
-                placeholderTextColor: "#6D574B"
                 onAccepted: panel.save()
             }
         }

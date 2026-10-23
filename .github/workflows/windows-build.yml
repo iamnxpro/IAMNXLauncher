@@ -58,6 +58,22 @@ jobs:
           cache: true
           setup-python: false
 
+      - name: Lint orbital QML
+        shell: pwsh
+        run: |
+          # Catch QML syntax and property errors before the build. The QML
+          # components are loaded at runtime, so a successful C++ build alone
+          # does not prove that the orbital UI starts.
+          $qmllint = (Get-Command qmllint -ErrorAction SilentlyContinue).Source
+          if (-not $qmllint) {
+            $qmllint = Join-Path $env:QT_ROOT_DIR "bin\qmllint.exe"
+          }
+          if (-not (Test-Path $qmllint)) {
+            throw "qmllint was not found in the Qt installation"
+          }
+          $qmlFiles = Get-ChildItem launcher/orbital/qml -Filter *.qml -File | ForEach-Object FullName
+          & $qmllint @qmlFiles
+
       - name: Restore vcpkg binary cache
         uses: actions/cache@v4
         with:

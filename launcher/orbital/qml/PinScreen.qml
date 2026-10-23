@@ -157,6 +157,22 @@ Item {
             border.width: pinInput.activeFocus ? 1.5 : 1
             border.color: pinInput.activeFocus ? "#FF5E1A" : (errorText !== "" ? "#B43A2B" : "#3A241A")
 
+            Text {
+                anchors.left: parent.left
+                anchors.right: eyeButton.left
+                anchors.leftMargin: 18
+                anchors.rightMargin: 10
+                anchors.verticalCenter: parent.verticalCenter
+                text: Lang.t("pin.placeholder", Lang.revision)
+                color: "#6D574B"
+                font.family: "Segoe UI"
+                font.pixelSize: 16
+                horizontalAlignment: Lang.rtl ? Text.AlignRight : Text.AlignLeft
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+                visible: pinInput.text.length === 0
+            }
+
             TextInput {
                 id: pinInput
                 anchors.left: parent.left
@@ -178,8 +194,6 @@ Item {
                 selectByMouse: true
                 activeFocusOnTab: true
                 horizontalAlignment: Lang.rtl ? TextInput.AlignRight : TextInput.AlignLeft
-                placeholderText: Lang.t("pin.placeholder", Lang.revision)
-                placeholderTextColor: "#6D574B"
                 onAccepted: lock.submit()
                 onTextChanged: if (errorText !== "") errorText = ""
             }
