@@ -72,6 +72,10 @@ int main(int argc, char* argv[])
             Q_INIT_RESOURCE(flat_white);
 
             Q_INIT_RESOURCE(shaders);
+            // orbital.qrc lives in the Launcher_logic static library. Without
+            // this reference the linker drops its resource initialiser and
+            // qrc:/orbital/assets/* cannot be resolved at runtime.
+            Q_INIT_RESOURCE(orbital);
             return app.exec();
         }
         case Application::Failed:

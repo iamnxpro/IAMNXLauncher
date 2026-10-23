@@ -460,6 +460,17 @@ set(ORBITAL_SOURCES
     orbital/LanguageController.cpp
 )
 
+# Keep the whole orbital QML tree in the executable's resource bundle. A glob
+# with CONFIGURE_DEPENDS means a newly added .qml file is picked up without
+# having to remember to add it to a hand-maintained list.
+file(GLOB_RECURSE ORBITAL_QML_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/orbital/qml/*.qml"
+)
+list(FIND ORBITAL_QML_FILES "${CMAKE_CURRENT_SOURCE_DIR}/orbital/qml/main.qml" ORBITAL_MAIN_QML_INDEX)
+if(ORBITAL_MAIN_QML_INDEX EQUAL -1)
+    message(FATAL_ERROR "orbital/qml/main.qml is missing; the orbital UI cannot be built")
+endif()
+
 set(TOOLS_SOURCES
     # Tools
     tools/BaseExternalTool.cpp
@@ -1340,6 +1351,17 @@ if(APPLE)
 endif()
 
 add_executable(${Launcher_Name} MACOSX_BUNDLE WIN32 main.cpp ${LAUNCHER_RCS})
+
+# Attach the QML resources directly to the executable. Resources compiled into
+# Launcher_logic (a static library) are only linked when referenced explicitly,
+# which is why orbital.qrc needs Q_INIT_RESOURCE(orbital) in main.cpp. Attaching
+# this bundle to the executable guarantees main.qml is linked even if that
+# initialiser is ever missed.
+qt_add_resources(${Launcher_Name} "orbital_qml"
+    PREFIX "/orbital/qml"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/orbital/qml"
+    FILES ${ORBITAL_QML_FILES}
+)
 
 if(${Launcher_USE_PCH})
     target_precompile_headers(${Launcher_Name} REUSE_FROM Launcher_logic)

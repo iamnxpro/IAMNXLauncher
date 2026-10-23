@@ -1,16 +1,8 @@
 <!DOCTYPE RCC>
 <RCC version="1.0">
     <qresource prefix="/orbital">
-        <file>qml/main.qml</file>
-        <file>qml/OrbitalScene.qml</file>
-        <file>qml/Character.qml</file>
-        <file>qml/TexturedFace.qml</file>
-        <file>qml/TexturedBox.qml</file>
-        <file>qml/Core.qml</file>
-        <file>qml/OrbitalNode.qml</file>
-        <file>qml/InstanceNode.qml</file>
-        <file>qml/PinScreen.qml</file>
-        <file>qml/SecurityPanel.qml</file>
+        <!-- QML files are compiled by qt_add_resources() in CMakeLists.txt so
+             every file in orbital/qml is included automatically. -->
 
         <file>assets/fx/portal.png</file>
 
