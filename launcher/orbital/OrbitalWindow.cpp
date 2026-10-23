@@ -15,6 +15,7 @@
 #include <QDebug>
 #include <QGuiApplication>
 #include <QMessageBox>
+#include <QQmlContext>
 #include <QQmlError>
 #include <QQuickView>
 #include <QQuickWindow>
